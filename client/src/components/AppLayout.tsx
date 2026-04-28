@@ -4,6 +4,7 @@ import { Layout, Menu, Typography, theme } from 'antd';
 import {
   SearchOutlined,
   PlusCircleOutlined,
+  MessageOutlined,
   BulbOutlined,
   CloudServerOutlined,
 } from '@ant-design/icons';
@@ -12,8 +13,9 @@ const { Sider, Content, Header } = Layout;
 const { Text } = Typography;
 
 const menuItems = [
-  { key: '/tasks', icon: <SearchOutlined />, label: '调查列表' },
   { key: '/new', icon: <PlusCircleOutlined />, label: '新建调查' },
+  { key: '/tasks', icon: <SearchOutlined />, label: '调查列表' },
+  { key: '/chat', icon: <MessageOutlined />, label: '运维对话' },
   { key: '/recommendations', icon: <BulbOutlined />, label: '推荐建议' },
 ];
 

@@ -48,3 +48,18 @@ export function getRecommendation(recommendationId: string) {
 export function getConfig() {
   return request<{ agentSpaceId: string; region: string; profile: string }>('/config');
 }
+
+export function createChat() {
+  return request<{ executionId: string }>('/chat', { method: 'POST' });
+}
+
+export function listChats() {
+  return request('/chats');
+}
+
+export function sendMessage(executionId: string, message: string) {
+  return request(`/chat/${executionId}/message`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}

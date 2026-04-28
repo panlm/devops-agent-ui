@@ -1,12 +1,27 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Card, Input, Button, Typography, Space, Alert, Select, message } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { Card, Input, Button, Typography, Space, Select, message } from 'antd';
+import { SendOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { createTask } from '../api/client';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+const HISTORY_KEY = 'devops-agent-prompt-history';
+const MAX_HISTORY = 20;
+
+function loadHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(list: string[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, MAX_HISTORY)));
+}
 
 interface ChatMessage {
   role: 'user' | 'system';
@@ -18,10 +33,11 @@ export default function NewInvestigation() {
   const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
+  const [history, setHistory] = useState<string[]>(loadHistory);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'system',
-      content: '你好！请描述你要调查的问题，我会帮你创建一个新的调查任务。\n\n例如: "帮我查一下东京区域 i-07a97aa2582de1825 这台 EC2 过去一个月都有哪些操作"',
+      content: '你好！请描述你要调查的问题，我会帮你创建一个新的调查任务。',
     },
   ]);
 
@@ -53,7 +69,17 @@ export default function NewInvestigation() {
     const desc = input.trim();
     setMessages((prev) => [...prev, { role: 'user', content: desc }]);
     setInput('');
+    const updated = [desc, ...history.filter((h) => h !== desc)].slice(0, MAX_HISTORY);
+    setHistory(updated);
+    saveHistory(updated);
     mutation.mutate({ description: desc, priority });
+  };
+
+  const handleDeleteHistory = (idx: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = history.filter((_, i) => i !== idx);
+    setHistory(updated);
+    saveHistory(updated);
   };
 
   return (
@@ -64,7 +90,59 @@ export default function NewInvestigation() {
         styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}
       >
         <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
-          {messages.map((msg, i) => (
+          {/* System greeting */}
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
+            <div style={{ maxWidth: '80%', padding: '10px 16px', borderRadius: 12, background: '#f0f0f0', color: '#000', whiteSpace: 'pre-wrap' }}>
+              {messages[0].content}
+            </div>
+          </div>
+
+          {/* History prompts */}
+          {history.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <Text type="secondary" style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>
+                历史提示词:
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {history.map((h, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setInput(h)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #e8e8e8',
+                      cursor: 'pointer',
+                      background: '#fafafa',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#e6f4ff';
+                      e.currentTarget.style.borderColor = '#91caff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fafafa';
+                      e.currentTarget.style.borderColor = '#e8e8e8';
+                    }}
+                  >
+                    <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'rgba(0,0,0,0.88)' }}>
+                      {h}
+                    </div>
+                    <DeleteOutlined
+                      style={{ color: '#bfbfbf', fontSize: 12, flexShrink: 0 }}
+                      onClick={(e) => handleDeleteHistory(i, e)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chat messages (skip first system greeting) */}
+          {messages.slice(1).map((msg, i) => (
             <div
               key={i}
               style={{

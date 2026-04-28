@@ -50,19 +50,31 @@ export default function TaskList() {
       },
     },
     {
+      title: '耗时',
+      key: 'duration',
+      width: '10%',
+      render: (_: any, record: any) => {
+        if (record.status === 'PENDING_START' || record.status === 'PENDING_TRIAGE') {
+          return '-';
+        }
+        if (record.status === 'IN_PROGRESS') {
+          const sec = dayjs().diff(dayjs(record.createdAt), 'second');
+          if (sec < 60) return `${sec}秒`;
+          return `${Math.floor(sec / 60)}分钟`;
+        }
+        const sec = dayjs(record.updatedAt).diff(dayjs(record.createdAt), 'second');
+        if (sec < 60) return `${sec}秒`;
+        if (sec < 3600) return `${Math.floor(sec / 60)}分钟`;
+        return `${Math.floor(sec / 60 / 60)}小时${Math.floor((sec % 3600) / 60)}分`;
+      },
+    },
+    {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      width: '18%',
+      width: '15%',
       defaultSortOrder: 'descend' as const,
       sorter: (a: any, b: any) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(),
-      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      width: '18%',
       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
     },
   ];

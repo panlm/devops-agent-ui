@@ -129,6 +129,19 @@ router.get('/recommendations/:recommendationId', async (req, res, next) => {
   }
 });
 
+// GET /api/chats - List chat sessions
+router.get('/chats', async (req, res, next) => {
+  try {
+    const command = new ListChatsCommand({
+      agentSpaceId: req.agentSpaceId,
+    });
+    const result = await req.awsClient.send(command);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/chat - Create a new chat
 router.post('/chat', async (req, res, next) => {
   try {
@@ -149,7 +162,7 @@ router.post('/chat/:executionId/message', async (req, res, next) => {
     const command = new SendMessageCommand({
       agentSpaceId: req.agentSpaceId,
       executionId: req.params.executionId,
-      body: message,
+      content: message,
     });
     const result = await req.awsClient.send(command);
     res.json(result);

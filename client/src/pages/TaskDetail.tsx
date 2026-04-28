@@ -131,11 +131,14 @@ function JournalView({ executionId }: { executionId: string }) {
       }
       if (texts.length === 0) return null;
       const preview = texts[0].length > 80 ? texts[0].slice(0, 80) + '...' : texts[0];
-      borderColor = '#d9d9d9';
+      const isUser = role === 'user' || role === 'human';
+      const roleColor = isUser ? '#52c41a' : '#1677ff';
+      const roleLabel = isUser ? 'User' : 'Agent';
+      borderColor = isUser ? '#52c41a' : '#1677ff';
       label = (
         <span>
-          <MessageOutlined style={{ color: '#8c8c8c', marginRight: 8 }} />
-          <Tag>{role === 'assistant' ? 'Agent' : role}</Tag>
+          <MessageOutlined style={{ color: roleColor, marginRight: 8 }} />
+          <Tag color={roleColor}>{roleLabel}</Tag>
           <Text ellipsis style={{ maxWidth: 500, display: 'inline' }}>{preview}</Text>
           <Text type="secondary" style={{ fontSize: 12, marginLeft: 12 }}>
             {dayjs(record.createdAt).format('YYYY-MM-DD HH:mm:ss')}
@@ -190,35 +193,25 @@ function ExecutionView({ taskId }: { taskId: string }) {
   const executions = data?.executions || [];
   if (executions.length === 0) return <Empty description="暂无执行记录" />;
 
-  const items = executions
-    .filter((e: any) => e.agentSubTask === 'oncall' || e.agentType === 'ops1')
-    .map((e: any) => ({
+  const toItem = (e: any, showType = false) => {
+    const s = getStatus(e.executionStatus);
+    return {
       key: e.executionId,
       label: (
         <span>
-          执行 {dayjs(e.createdAt).format('YYYY-MM-DD HH:mm')} —{' '}
-          <Tag color={e.executionStatus === 'STOPPED' || e.executionStatus === 'COMPLETED' ? 'green' : 'blue'}>
-            {e.executionStatus === 'STOPPED' ? '已完成' : e.executionStatus}
-          </Tag>
+          {showType ? `${e.agentSubTask || e.agentType} — ` : '执行 '}
+          {dayjs(e.createdAt).format('YYYY-MM-DD HH:mm')} —{' '}
+          <Tag color={s.color}>{s.label}</Tag>
         </span>
       ),
       children: <JournalView executionId={e.executionId} />,
-    }));
+    };
+  };
 
-  if (items.length === 0) {
-    // Show all executions if no oncall/ops1 found
-    const allItems = executions.map((e: any) => ({
-      key: e.executionId,
-      label: (
-        <span>
-          {e.agentSubTask || e.agentType} — {dayjs(e.createdAt).format('YYYY-MM-DD HH:mm')}{' '}
-          <Tag>{e.executionStatus}</Tag>
-        </span>
-      ),
-      children: <JournalView executionId={e.executionId} />,
-    }));
-    return <Collapse items={allItems} defaultActiveKey={[allItems[0]?.key]} />;
-  }
+  const filtered = executions.filter((e: any) => e.agentSubTask === 'oncall' || e.agentType === 'ops1');
+  const items = filtered.length > 0
+    ? filtered.map((e: any) => toItem(e))
+    : executions.map((e: any) => toItem(e, true));
 
   return <Collapse items={items} defaultActiveKey={[items[0]?.key]} />;
 }
