@@ -16,24 +16,32 @@ export default function TaskList() {
 
   const columns = [
     {
-      title: '标题',
-      dataIndex: 'title',
+      title: '标题 / 描述',
       key: 'title',
       ellipsis: true,
-      width: '35%',
+      render: (_: any, record: any) => (
+        <div>
+          <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{record.title}</div>
+          {record.description && (
+            <div style={{ fontSize: 13, color: 'rgba(0,0,0,0.65)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+              {record.description}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: '类型',
       dataIndex: 'taskType',
       key: 'taskType',
-      width: '8%',
+      width: 80,
       render: (v: string) => taskTypeMap[v] || v,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: '10%',
+      width: 90,
       render: (v: string) => {
         const s = getStatus(v);
         return <Tag color={s.color}>{s.label}</Tag>;
@@ -43,7 +51,7 @@ export default function TaskList() {
       title: '优先级',
       dataIndex: 'priority',
       key: 'priority',
-      width: '10%',
+      width: 80,
       render: (v: string) => {
         const p = getPriority(v);
         return <Tag color={p.color}>{p.label}</Tag>;
@@ -52,7 +60,7 @@ export default function TaskList() {
     {
       title: '耗时',
       key: 'duration',
-      width: '10%',
+      width: 90,
       render: (_: any, record: any) => {
         if (record.status === 'PENDING_START' || record.status === 'PENDING_TRIAGE') {
           return '-';
@@ -72,7 +80,7 @@ export default function TaskList() {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      width: '15%',
+      width: 150,
       defaultSortOrder: 'descend' as const,
       sorter: (a: any, b: any) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(),
       render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),

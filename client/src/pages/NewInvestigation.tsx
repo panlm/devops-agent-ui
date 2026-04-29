@@ -104,7 +104,7 @@ export default function NewInvestigation() {
                 历史提示词:
               </Text>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {history.map((h, i) => (
+                {[...history].reverse().map((h, i) => (
                   <div
                     key={i}
                     onClick={() => setInput(h)}
@@ -133,7 +133,7 @@ export default function NewInvestigation() {
                     </div>
                     <DeleteOutlined
                       style={{ color: '#bfbfbf', fontSize: 12, flexShrink: 0 }}
-                      onClick={(e) => handleDeleteHistory(i, e)}
+                      onClick={(e) => handleDeleteHistory(history.length - 1 - i, e)}
                     />
                   </div>
                 ))}
