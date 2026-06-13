@@ -12,23 +12,73 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export function listTasks(body?: Record<string, unknown>) {
-  return request('/tasks/list', { method: 'POST', body: JSON.stringify(body || {}) });
+// ============================================================
+// Investigation（调查 = Backlog Task）
+// 一个调查可包含多个 execution（执行），execution 的过程记录通过 journal 读取。
+// ============================================================
+
+export function listInvestigations(body?: Record<string, unknown>) {
+  return request('/investigations/list', { method: 'POST', body: JSON.stringify(body || {}) });
 }
 
-export function getTask(taskId: string) {
-  return request(`/tasks/${taskId}`);
+export function getInvestigation(investigationId: string) {
+  return request(`/investigations/${investigationId}`);
 }
 
-export function createTask(data: { title?: string; description: string; priority?: string }) {
-  return request('/tasks', { method: 'POST', body: JSON.stringify(data) });
+export function createInvestigation(data: { title?: string; description: string; priority?: string }) {
+  return request('/investigations', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function listExecutions(taskId: string) {
-  return request(`/tasks/${taskId}/executions`);
+export function listInvestigationExecutions(investigationId: string) {
+  return request(`/investigations/${investigationId}/executions`);
 }
 
-export function listJournalRecords(executionId: string, params?: { recordType?: string; order?: string; nextToken?: string }) {
+/** 读取某次调查执行的 journal（调查时间线：发现/总结/消息等） */
+export function getExecutionJournal(
+  executionId: string,
+  params?: { recordType?: string; order?: string; nextToken?: string }
+) {
+  return getJournal(executionId, params);
+}
+
+// ============================================================
+// Chat（对话）—— 与 Investigation 完全独立。
+// createChat 返回的 executionId 即代表「一个会话」。
+// ============================================================
+
+export function listChats() {
+  return request('/chats');
+}
+
+export function createChat() {
+  return request<{ executionId: string }>('/chat', { method: 'POST' });
+}
+
+export function sendMessage(executionId: string, message: string) {
+  return request(`/chat/${executionId}/message`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
+/** 读取某个对话会话的消息历史（底层与调查 journal 同一接口，语义不同） */
+export function getChatMessages(
+  executionId: string,
+  params?: { recordType?: string; order?: string; nextToken?: string }
+) {
+  return getJournal(executionId, params);
+}
+
+// ============================================================
+// 通用底层：journal 记录读取
+// 后端 GET /executions/:executionId/journal 既服务于调查执行，也服务于对话会话。
+// 上层请用 getExecutionJournal / getChatMessages 表达各自语义，不要直接调它。
+// ============================================================
+
+function getJournal(
+  executionId: string,
+  params?: { recordType?: string; order?: string; nextToken?: string }
+) {
   const qs = new URLSearchParams();
   if (params?.recordType) qs.set('recordType', params.recordType);
   if (params?.order) qs.set('order', params.order);
@@ -36,6 +86,10 @@ export function listJournalRecords(executionId: string, params?: { recordType?: 
   const query = qs.toString();
   return request(`/executions/${executionId}/journal${query ? `?${query}` : ''}`);
 }
+
+// ============================================================
+// Recommendations（推荐建议）
+// ============================================================
 
 export function listRecommendations(body?: Record<string, unknown>) {
   return request('/recommendations/list', { method: 'POST', body: JSON.stringify(body || {}) });
@@ -45,21 +99,10 @@ export function getRecommendation(recommendationId: string) {
   return request(`/recommendations/${recommendationId}`);
 }
 
+// ============================================================
+// 其它
+// ============================================================
+
 export function getConfig() {
   return request<{ agentSpaceId: string; region: string; profile: string }>('/config');
-}
-
-export function createChat() {
-  return request<{ executionId: string }>('/chat', { method: 'POST' });
-}
-
-export function listChats() {
-  return request('/chats');
-}
-
-export function sendMessage(executionId: string, message: string) {
-  return request(`/chat/${executionId}/message`, {
-    method: 'POST',
-    body: JSON.stringify({ message }),
-  });
 }

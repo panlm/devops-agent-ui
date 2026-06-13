@@ -16,7 +16,7 @@ import { ArrowLeftOutlined, BugOutlined, FileSearchOutlined, MessageOutlined } f
 import dayjs from 'dayjs';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { getTask, listExecutions, listJournalRecords } from '../api/client';
+import { getInvestigation, listInvestigationExecutions, getExecutionJournal } from '../api/client';
 import { getStatus, getPriority, taskTypeMap } from '../utils/status';
 
 marked.setOptions({ breaks: true, gfm: true });
@@ -34,7 +34,7 @@ function Md({ children }: { children: string }) {
 function JournalView({ executionId }: { executionId: string }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['journal', executionId],
-    queryFn: () => listJournalRecords(executionId) as Promise<any>,
+    queryFn: () => getExecutionJournal(executionId) as Promise<any>,
   });
 
   if (isLoading) return <Spin tip="加载调查记录..." />;
@@ -184,7 +184,7 @@ function JournalView({ executionId }: { executionId: string }) {
 function ExecutionView({ taskId }: { taskId: string }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['executions', taskId],
-    queryFn: () => listExecutions(taskId) as Promise<any>,
+    queryFn: () => listInvestigationExecutions(taskId) as Promise<any>,
   });
 
   if (isLoading) return <Spin tip="加载执行记录..." />;
@@ -220,8 +220,8 @@ export default function TaskDetail() {
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['task', taskId],
-    queryFn: () => getTask(taskId!) as Promise<any>,
+    queryKey: ['investigation', taskId],
+    queryFn: () => getInvestigation(taskId!) as Promise<any>,
     enabled: !!taskId,
   });
 

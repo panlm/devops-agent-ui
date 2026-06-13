@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Table, Tag, Typography, Card, Space, Alert } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { listTasks } from '../api/client';
+import { listInvestigations } from '../api/client';
 import { getStatus, getPriority, taskTypeMap } from '../utils/status';
 
 const { Title } = Typography;
@@ -10,8 +10,8 @@ const { Title } = Typography;
 export default function TaskList() {
   const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: () => listTasks() as Promise<any>,
+    queryKey: ['investigations'],
+    queryFn: () => listInvestigations() as Promise<any>,
   });
 
   const columns = [

@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Card, Input, Button, Typography, Space, Select, message } from 'antd';
 import { SendOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { createTask } from '../api/client';
+import { createInvestigation } from '../api/client';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -43,7 +43,7 @@ export default function NewInvestigation() {
 
   const mutation = useMutation({
     mutationFn: (data: { description: string; priority: string }) =>
-      createTask({ description: data.description, priority: data.priority }) as Promise<any>,
+      createInvestigation({ description: data.description, priority: data.priority }) as Promise<any>,
     onSuccess: (result) => {
       const taskId = result.task?.taskId || result.taskId;
       setMessages((prev) => [

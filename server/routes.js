@@ -14,8 +14,12 @@ const {
 
 const router = express.Router();
 
-// GET /api/tasks - List all backlog tasks
-router.post('/tasks/list', async (req, res, next) => {
+// ============================================================
+// Investigation(调查 = Backlog Task)相关接口
+// ============================================================
+
+// POST /api/investigations/list - 列出所有调查任务
+router.post('/investigations/list', async (req, res, next) => {
   try {
     const { nextToken, filter, sort } = req.body;
     const command = new ListBacklogTasksCommand({
@@ -31,12 +35,12 @@ router.post('/tasks/list', async (req, res, next) => {
   }
 });
 
-// GET /api/tasks/:taskId - Get a single task
-router.get('/tasks/:taskId', async (req, res, next) => {
+// GET /api/investigations/:investigationId - 获取单个调查
+router.get('/investigations/:investigationId', async (req, res, next) => {
   try {
     const command = new GetBacklogTaskCommand({
       agentSpaceId: req.agentSpaceId,
-      taskId: req.params.taskId,
+      taskId: req.params.investigationId,
     });
     const result = await req.awsClient.send(command);
     res.json(result);
@@ -45,8 +49,8 @@ router.get('/tasks/:taskId', async (req, res, next) => {
   }
 });
 
-// POST /api/tasks - Create a new investigation
-router.post('/tasks', async (req, res, next) => {
+// POST /api/investigations - 创建一个新调查
+router.post('/investigations', async (req, res, next) => {
   try {
     const { title, description, priority } = req.body;
     const command = new CreateBacklogTaskCommand({
@@ -63,12 +67,12 @@ router.post('/tasks', async (req, res, next) => {
   }
 });
 
-// GET /api/tasks/:taskId/executions - List executions for a task
-router.get('/tasks/:taskId/executions', async (req, res, next) => {
+// GET /api/investigations/:investigationId/executions - 列出调查的执行记录
+router.get('/investigations/:investigationId/executions', async (req, res, next) => {
   try {
     const command = new ListExecutionsCommand({
       agentSpaceId: req.agentSpaceId,
-      taskId: req.params.taskId,
+      taskId: req.params.investigationId,
     });
     const result = await req.awsClient.send(command);
     res.json(result);
@@ -77,19 +81,33 @@ router.get('/tasks/:taskId/executions', async (req, res, next) => {
   }
 });
 
-// GET /api/executions/:executionId/journal - List journal records
+// ============================================================
+// 通用：journal 记录（调查的执行时间线 + 对话的消息历史，底层同一接口）
+// ============================================================
+
+// GET /api/executions/:executionId/journal - 读取 journal 记录
+// 自动翻页：ListJournalRecords 每页上限 100 条，会话消息多时会分页。
+// 这里循环拉完所有页再返回，保证调用方拿到完整记录（否则长会话只显示第一页）。
 router.get('/executions/:executionId/journal', async (req, res, next) => {
   try {
-    const { recordType, order, nextToken } = req.query;
-    const command = new ListJournalRecordsCommand({
-      agentSpaceId: req.agentSpaceId,
-      executionId: req.params.executionId,
-      recordType: recordType || undefined,
-      order: order || 'ASC',
-      nextToken: nextToken || undefined,
-    });
-    const result = await req.awsClient.send(command);
-    res.json(result);
+    const { recordType, order } = req.query;
+    const allRecords = [];
+    let nextToken = req.query.nextToken || undefined;
+    // 安全上限，防止异常情况下无限翻页（100 页 = 1万条，足够任何会话）
+    for (let page = 0; page < 100; page++) {
+      const command = new ListJournalRecordsCommand({
+        agentSpaceId: req.agentSpaceId,
+        executionId: req.params.executionId,
+        recordType: recordType || undefined,
+        order: order || 'ASC',
+        nextToken,
+      });
+      const result = await req.awsClient.send(command);
+      if (result.records) allRecords.push(...result.records);
+      nextToken = result.nextToken;
+      if (!nextToken) break;
+    }
+    res.json({ records: allRecords });
   } catch (err) {
     next(err);
   }
@@ -129,7 +147,13 @@ router.get('/recommendations/:recommendationId', async (req, res, next) => {
   }
 });
 
-// GET /api/chats - List chat sessions
+// ============================================================
+// Chat(对话)相关接口 —— 与 Investigation 完全独立
+// 注意：CreateChat 直接返回 executionId，这里的 executionId 即「一个会话」，
+// 与 Investigation 下的 execution（一次调查执行）是不同领域，勿混淆。
+// ============================================================
+
+// GET /api/chats - 列出对话会话
 router.get('/chats', async (req, res, next) => {
   try {
     const command = new ListChatsCommand({
