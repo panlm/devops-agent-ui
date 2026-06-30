@@ -35,6 +35,10 @@ editHistory:
     summary: 'Sync PRD with v0.0.1+ code: added multi-turn chat (运维对话), prompt history, Markdown rendering, collapsible panels, execution status mapping, User/Agent color coding, duration column, sidebar reorder, DOMPurify security, localStorage persistence. Moved chat from Phase 2 to MVP. Added FRs 28-44, Journey 5, updated API integration table.'
   - date: '2026-06-13'
     summary: 'Sync PRD with latest code: (1) Multi-turn chat now has a session list sidebar (lists all chat sessions via list-chats, sorted by recency, click to switch history sessions) — added FRs 45-48 and expanded Journey 5. (2) Added operator-role credential mode (assume DevOpsAgentRole-WebappAdmin + AgentSpaceId session tag + aligned RoleSessionName) so self-hosted UI shares the same session bucket as the standard Web Console — added FRs 49-51, Configuration and Security updates. (3) Renamed API routes /api/tasks/* → /api/investigations/* (chat routes unchanged). (4) Journal reads now auto-paginate to fetch all pages.'
+  - date: '2026-06-30'
+    summary: 'Sync PRD with current code: (1) Added top header bar showing app title. (2) Enter-to-send / Shift+Enter-for-newline in all text inputs. (3) Per-message timestamps in chat. (4) Duplicate final_response dedup logic. (5) Execution filtering (oncall/ops1 priority, fallback to all with type labels). (6) Task ID copyable. (7) Extended status/priority mappings (FAILED, TIMED_OUT, CANCELLED, etc.) and EVALUATION task type. (8) Recommendations inline structured detail (no separate detail page). (9) Recommendations API filtering by priority/status/taskId/goalId. (10) Custom visible scrollbar + Markdown table horizontal overflow. (11) Description column in task list. (12) Welcome greeting in chat. (13) ServiceQuotaExceededException handling. Added FRs 52-64.'
+  - date: '2026-06-30'
+    summary: 'Sync PRD: Added 3 new top-level pages matching official DevOps Agent web app — (1) 拓扑页: ListAssociations + ListServices(graceful fallback) showing connected services and their configuration. (2) 制品页: ListGoals showing goals/scheduled reports with version, schedule, and expandable description. (3) 变更页(Preview): placeholder for code change reviews (no SDK API yet). Added FRs 65-73, new API routes, updated navigation and API integration table. Moved Goals from Phase 2 to MVP.'
 ---
 
 # 产品需求文档 - devops-agent-ui
@@ -112,7 +116,7 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
 
 1. **后端代理服务**
    - Node.js + Express 服务,读取本地 AWS 凭证链
-   - 代理所有 DevOps Agent API 端点(list-backlog-tasks、get-backlog-task、list-executions、list-journal-records、list-recommendations、create-backlog-task、create-chat、send-message、list-chats);调查类路由暴露在 `/api/investigations/*`,对话类路由在 `/api/chat(s)/*`
+   - 代理所有 DevOps Agent API 端点(list-backlog-tasks、get-backlog-task、list-executions、list-journal-records、list-recommendations、create-backlog-task、create-chat、send-message、list-chats、list-associations、list-services、list-goals);调查类路由暴露在 `/api/investigations/*`,对话类路由在 `/api/chat(s)/*`,拓扑在 `/api/topology/*`,目标在 `/api/goals/*`
    - 可选的 operator 角色 assume(DEVOPS_OPERATOR_ROLE_ARN)并带 AgentSpaceId session tag,以与标准 Web 控制台共享同一会话桶
    - 通过 .env 配置 AGENT_SPACE_ID 和 AWS_PROFILE
    - 处理分页 token,包括自动翻页读取 journal 以返回完整记录
@@ -159,15 +163,32 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
    - 详情视图含摘要、后续步骤、关联调查
 
 7. **导航与布局**
-   - 中文侧边栏导航:新建调查 / 调查列表 / 运维对话 / 推荐建议
-   - 固定侧边栏 + 可滚动主内容区
+   - 中文侧边栏导航:新建调查 / 调查列表 / 运维对话 / 推荐建议 / 变更 / 制品 / 拓扑
+   - 固定侧边栏 + 顶部 Header("AWS DevOps Agent 运维控制台") + 可滚动主内容区
    - 全程使用 Ant Design 组件
    - 侧边栏头部为 "DevOps Agent" 品牌标识,配 CloudServerOutlined 图标
+
+8. **拓扑页**
+   - 展示 Agent Space 已关联服务列表(ListAssociations API),包括服务类型、名称、状态、创建时间
+   - 服务类型从 association 的 configuration key 自动推断(aws/github/slack/eventChannel/gitlab 等)
+   - 可展开查看每个关联的详细配置(账号 ID、角色 ARN、仓库、端点等)
+   - 账号级已注册服务(ListServices)在有权限时展示卡片视图;无权限时静默降级不报错
+
+9. **制品页**
+   - 展示 Agent 的目标与定期报告(ListGoals API),包含标题、类型(值班报告/自定义目标)、版本、状态、调度表达式、上次评估时间
+   - 可展开查看目标的描述和 objectives 详情
+   - 对话中生成的制品(Artifacts)引导用户到运维对话页查看
+
+10. **变更页(Preview)**
+    - 展示 DevOps Agent 审查的代码变更和发布就绪性评估
+    - 当前 SDK 无独立 ListChanges API,页面为空状态并引导用户通过运维对话触发 Agent 评审代码分支
+    - 待 AWS SDK 支持后接入真实数据
 
 ### 第二阶段 —— 增强
 
 - 进行中任务的调查状态自动刷新
-- Goals(目标)视图与管理
+- 变更页接入真实 API(待 SDK 支持 ListChanges)
+- 拓扑页增加可视化图形展示(基于 association 数据)
 - 跨调查的搜索与筛选
 - 调查列表排序选项
 
@@ -302,6 +323,10 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
 | 创建对话 | POST /api/chat | create-chat |
 | 发送对话消息 | POST /api/chat/:executionId/message | send-message |
 | 列出对话会话 | GET /api/chats | list-chats |
+| 拓扑关联 | GET /api/topology/associations | list-associations |
+| 拓扑服务 | GET /api/topology/services | list-services |
+| 目标列表 | POST /api/goals/list | list-goals |
+| 变更列表 | POST /api/changes/list | (暂无,返回空) |
 | 配置 | GET /api/config | (本地配置) |
 
 > 命名说明:调查类路由用 `/api/investigations/*`(底层是 Backlog Task API);对话类路由用 `/api/chat(s)/*`。两个领域刻意保持分离 —— 对话的 `executionId` 代表一个会话,与调查的一次 execution(执行)是不同概念。
@@ -336,8 +361,12 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
 - FR7:运维工程师可查看根因发现,其结构高亮、与普通消息分开
 - FR8:运维工程师在有调查摘要时可查看摘要
 - FR29:运维工程师可在 journal 记录中通过颜色区分用户消息(绿色)与 Agent 回复(蓝色)
-- FR30:执行状态以中文标签和带颜色标签展示:STOPPED→已完成(绿)、RUNNING→运行中(蓝)、STARTING→启动中(橙)、PENDING→等待中(默认)
+- FR30:所有状态以中文标签和带颜色标签展示。任务/执行状态映射:PENDING_TRIAGE→待分类(默认)、PENDING_START→待开始(橙)、IN_PROGRESS→进行中(蓝)、COMPLETED→已完成(绿)、STOPPED→已完成(绿)、RUNNING→运行中(蓝)、STARTING→启动中(蓝)、PENDING→等待中(橙)、FAILED→失败(红)、TIMED_OUT→已超时(红)、CANCELLED→已取消(默认)、PENDING_CUSTOMER_APPROVAL→待审批(警告)、LINKED→已关联(蓝)、UPDATE_IN_PROGRESS→更新中(蓝)。推荐建议状态:PROPOSED→已建议(蓝)、ACCEPTED→已接受(绿)、REJECTED→已拒绝(红)
+- FR60:任务类型支持 INVESTIGATION(调查)和 EVALUATION(评估)两种类型的中文映射
 - FR31:调查耗时列由 createdAt/updatedAt 计算流逝时间;等待态显示"-",进行中任务显示实时耗时
+- FR57:调查列表的"标题"列同时展示标题(粗体)和描述(灰色副文本),双行布局,均做文本溢出省略处理
+- FR58:调查详情页的"任务 ID"字段支持一键复制(Ant Design `Text copyable`)
+- FR59:执行记录列表优先展示 `agentSubTask === 'oncall'` 或 `agentType === 'ops1'` 的执行;若无匹配则展示所有执行并附带类型标签,避免信息过载
 
 ### 调查创建
 
@@ -361,6 +390,10 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
 - FR42:Agent 回复支持完整 Markdown 渲染(GFM 表格、代码块、标题)
 - FR43:等待 Agent 响应时系统显示输入指示("Agent 思考中...")
 - FR44:对话自动滚动到最新消息 —— 切换会话时直接跳转(无动画),同一会话内来新消息时平滑滚动
+- FR53:所有文本输入区域支持 Enter 键直接发送、Shift+Enter 换行,减少鼠标操作
+- FR54:对话页每条消息气泡右下角展示 HH:mm:ss 格式的时间戳(用户消息为半透明白色,Agent 消息为半透明黑色)
+- FR55:系统自动去重 `final_response` 类型的 journal 记录 —— 若与最后一条 assistant 消息内容相同则不重复展示
+- FR56:对话页在无会话且无历史消息时展示中文欢迎引导语("你好！这里是运维对话...")
 - FR45:运维工程师可在左侧栏查看所有对话会话的列表(通过 ListChats API),按最近活动排序(updatedAt/createdAt 降序),每条展示自动生成的会话标题和时间戳
 - FR46:运维工程师可点击列表中某个会话切换并加载该历史对话;当前会话有视觉高亮
 - FR47:系统在发送消息期间自动刷新会话列表(5 秒间隔),并在响应完成后再刷新一次,让新建和改名的会话出现
@@ -369,15 +402,17 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
 ### 推荐建议
 
 - FR13:运维工程师可查看所有推荐建议的列表,含标题、优先级和状态
-- FR14:运维工程师可查看推荐建议详情,包括摘要、后续步骤、注意事项和受影响的调查
+- FR14:运维工程师可在列表内直接查看推荐建议的结构化详情 —— 系统将 JSON 格式的 summary 解析为概述(overview)、背景(background,可折叠)、下一步操作(next_steps)、注意事项(considerations)各区块内联展示,无需跳转到独立详情页
 - FR15:运维工程师可从一条推荐建议导航到其关联调查
+- FR61:推荐建议列表 API 支持按 priority、status、taskId、goalId 筛选,为后续增加筛选 UI 做好准备
 
 ### 导航与布局
 
-- FR16:运维工程师可通过常驻侧边栏导航(新建调查 / 调查列表 / 运维对话 / 推荐建议)在调查列表、调查创建、多轮对话和推荐建议各视图间切换
+- FR16:运维工程师可通过常驻侧边栏导航(新建调查 / 调查列表 / 运维对话 / 推荐建议 / 变更 / 制品 / 拓扑)在各视图间切换
 - FR17:所有 UI 导航元素、标签、状态指示和章节标题均以中文呈现
 - FR18:技术数据内容(资源 ID、发现文本、API 响应)在中文标签容器内保留原始英文
 - FR28:侧边栏展示 "DevOps Agent" 品牌标识及 CloudServerOutlined 图标,可折叠为仅图标模式
+- FR52:页面顶部固定 Header 栏,展示 "AWS DevOps Agent 运维控制台" 文字标题,提供全局上下文
 
 ### 后端与凭证管理
 
@@ -393,9 +428,33 @@ DevOps Agent UI 是面向 AWS DevOps Agent 的轻量级中文 Web 客户端,消�
 ### 错误处理与反馈
 
 - FR24:当 AWS 凭证无效或过期时,系统显示中文错误提示
-- FR25:当 API 调用失败时(节流、网络错误、服务不可用),系统显示中文错误提示
+- FR25:当 API 调用失败时(节流、网络错误、服务不可用、配额超限),系统显示中文错误提示;已覆盖 AccessDeniedException、ResourceNotFoundException、ThrottlingException、ValidationException、ServiceQuotaExceededException 五种 AWS 错误类型
 - FR26:API 调用期间系统显示加载态
 - FR27:无数据时系统显示带中文引导的空状态
+
+### 拓扑
+
+- FR65:运维工程师可在拓扑页查看 Agent Space 已关联的所有服务(通过 ListAssociations API),以表格形式展示服务类型、名称、连接状态和创建时间
+- FR66:系统从 association 的 configuration key 自动推断服务类型(aws/github/slack/gitlab/eventChannel/mcpserver 等),无需依赖 ListServices 权限
+- FR67:运维工程师可展开任意关联行,查看其详细配置(账号 ID、角色 ARN、仓库路径、端点地址等),配置值支持一键复制
+- FR68:ListServices API(账号级)无权限时系统静默降级,不向用户展示错误;有权限时以卡片视图展示已注册服务
+
+### 制品
+
+- FR69:运维工程师可在制品页查看 Agent 的目标与定期报告列表(通过 ListGoals API),含标题、类型(值班报告/自定义目标)、版本号、状态、调度表达式和上次评估时间
+- FR70:运维工程师可展开目标行查看描述(description)和目标内容(objectives)
+- FR71:制品页提供引导文案,说明对话中生成的制品(如运维报告、健康评估)可在运维对话页查看
+
+### 变更(Preview)
+
+- FR72:运维工程师可在变更页查看 DevOps Agent 审查的代码变更(Preview 功能,待 SDK API 支持后接入数据)
+- FR73:变更页在无数据时展示空状态引导,告知用户通过运维对话让 Agent 评审代码分支来生成变更记录
+
+### UI 体验优化
+
+- FR62:对话页会话列表和消息区域使用常驻可见的细滚动条(覆盖 macOS overlay 默认隐藏行为),让用户随时感知内容位置和可滚动性
+- FR63:Markdown 渲染的表格支持水平滚动(`overflow-x: auto`),长表格不会撑破气泡容器;行内代码支持自动换行(`word-break: break-all`)
+- FR64:消息气泡设置 `minWidth: 0` + `overflow: hidden`,防止包含长 URL 或宽表格的消息撑破布局
 
 ## 非功能需求
 

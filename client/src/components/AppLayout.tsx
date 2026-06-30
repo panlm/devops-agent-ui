@@ -7,6 +7,9 @@ import {
   MessageOutlined,
   BulbOutlined,
   CloudServerOutlined,
+  SwapOutlined,
+  FileTextOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons';
 
 const { Sider, Content, Header } = Layout;
@@ -17,6 +20,9 @@ const menuItems = [
   { key: '/tasks', icon: <SearchOutlined />, label: '调查列表' },
   { key: '/chat', icon: <MessageOutlined />, label: '运维对话' },
   { key: '/recommendations', icon: <BulbOutlined />, label: '推荐建议' },
+  { key: '/changes', icon: <SwapOutlined />, label: '变更' },
+  { key: '/artifacts', icon: <FileTextOutlined />, label: '制品' },
+  { key: '/topology', icon: <ApartmentOutlined />, label: '拓扑' },
 ];
 
 export default function AppLayout() {

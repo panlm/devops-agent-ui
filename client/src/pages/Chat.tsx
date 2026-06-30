@@ -213,6 +213,7 @@ export default function Chat() {
           }
           style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column' }}
           styles={{ body: { flex: 1, overflowY: 'auto', padding: 0 } }}
+          classNames={{ body: 'custom-scroll' }}
         >
           {sessions.length === 0 ? (
             <Empty
@@ -264,7 +265,7 @@ export default function Chat() {
           style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
           styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}
         >
-          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16, paddingRight: 16 }}>
+          <div className="custom-scroll" style={{ flex: 1, overflowY: 'auto', paddingBottom: 16, paddingRight: 16 }}>
             {/* Welcome */}
             {!hasConversation && !executionId && (
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
@@ -292,6 +293,8 @@ export default function Chat() {
                 <div
                   style={{
                     maxWidth: '80%',
+                    minWidth: 0,
+                    overflow: 'hidden',
                     padding: '10px 16px',
                     borderRadius: 12,
                     background: msg.role === 'user' ? '#1677ff' : msg.role === 'system' ? '#fff2e8' : '#f0f0f0',

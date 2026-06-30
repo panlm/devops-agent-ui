@@ -8,6 +8,9 @@ import TaskDetail from './pages/TaskDetail';
 import NewInvestigation from './pages/NewInvestigation';
 import Recommendations from './pages/Recommendations';
 import Chat from './pages/Chat';
+import Changes from './pages/Changes';
+import Artifacts from './pages/Artifacts';
+import Topology from './pages/Topology';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +33,9 @@ export default function App() {
               <Route path="/new" element={<NewInvestigation />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/recommendations" element={<Recommendations />} />
+              <Route path="/changes" element={<Changes />} />
+              <Route path="/artifacts" element={<Artifacts />} />
+              <Route path="/topology" element={<Topology />} />
               <Route path="*" element={<Navigate to="/tasks" replace />} />
             </Route>
           </Routes>

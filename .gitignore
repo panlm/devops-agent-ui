@@ -5,3 +5,6 @@ client/dist/
 _bmad-output/
 _bmad/
 .claude/
+.agents/
+.kiro/
+.opencode/

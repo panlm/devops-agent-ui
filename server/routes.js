@@ -10,6 +10,9 @@ const {
   CreateChatCommand,
   SendMessageCommand,
   ListChatsCommand,
+  ListAssociationsCommand,
+  ListServicesCommand,
+  ListGoalsCommand,
 } = require('@aws-sdk/client-devops-agent');
 
 const router = express.Router();
@@ -193,6 +196,89 @@ router.post('/chat/:executionId/message', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ============================================================
+// Topology（拓扑）相关接口
+// ============================================================
+
+// GET /api/topology/associations - 列出 agent space 的所有关联
+router.get('/topology/associations', async (req, res, next) => {
+  try {
+    const allAssociations = [];
+    let nextToken;
+    for (let page = 0; page < 20; page++) {
+      const command = new ListAssociationsCommand({
+        agentSpaceId: req.agentSpaceId,
+        maxResults: 50,
+        nextToken,
+      });
+      const result = await req.awsClient.send(command);
+      if (result.associations) allAssociations.push(...result.associations);
+      nextToken = result.nextToken;
+      if (!nextToken) break;
+    }
+    res.json({ associations: allAssociations });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/topology/services - 列出账号级的已注册服务
+// 注意: ListServices 是账号级 API,operator 角色可能无权限,静默返回空
+router.get('/topology/services', async (req, res) => {
+  try {
+    const allServices = [];
+    let nextToken;
+    for (let page = 0; page < 20; page++) {
+      const command = new ListServicesCommand({
+        maxResults: 50,
+        nextToken,
+      });
+      const result = await req.awsClient.send(command);
+      if (result.services) allServices.push(...result.services);
+      nextToken = result.nextToken;
+      if (!nextToken) break;
+    }
+    res.json({ services: allServices });
+  } catch (err) {
+    // operator 角色通常无 ListServices 权限,静默返回空列表
+    res.json({ services: [] });
+  }
+});
+
+// ============================================================
+// Goals（目标）相关接口 —— 用于 Artifacts 页
+// ============================================================
+
+// POST /api/goals/list - 列出目标
+router.post('/goals/list', async (req, res, next) => {
+  try {
+    const { status, goalType, limit, nextToken } = req.body;
+    const command = new ListGoalsCommand({
+      agentSpaceId: req.agentSpaceId,
+      status,
+      goalType,
+      limit,
+      nextToken,
+    });
+    const result = await req.awsClient.send(command);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ============================================================
+// Changes（变更）—— 当前 SDK 无独立 ListChanges API。
+// 官方 Changes 页展示的是代码变更审查(Proposed changes),
+// 这些通过 chat 触发 Agent 评审代码分支后产生,暂无公开 list API。
+// 这里返回空列表,等 SDK 支持后再接入。
+// ============================================================
+
+// POST /api/changes/list
+router.post('/changes/list', async (req, res) => {
+  res.json({ tasks: [] });
 });
 
 // GET /api/config - Return current config (no secrets)

@@ -112,7 +112,10 @@ code {
 .md-content {
   line-height: 1.7;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: rgba(0, 0, 0, 0.88);
+  max-width: 100%;
+  min-width: 0;
 }
 .md-content p {
   margin-bottom: 8px;
@@ -121,7 +124,10 @@ code {
   margin-bottom: 0;
 }
 .md-content table {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   margin: 8px 0;
   font-size: 13px;
@@ -146,6 +152,9 @@ code {
   border-radius: 4px;
   font-size: 0.9em;
   display: inline;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .md-content pre {
   background: #f5f5f5;
@@ -180,3 +189,23 @@ code {
 .md-content h1 { font-size: 1.3em; }
 .md-content h2 { font-size: 1.15em; }
 .md-content h3 { font-size: 1.05em; }
+
+/* 常驻可见滚动条（覆盖 macOS overlay 滚动条默认隐藏行为） */
+.custom-scroll {
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: #c1c1c1 transparent;
+}
+.custom-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background-color: #c1c1c1;
+  border-radius: 4px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #a8a8a8;
+}

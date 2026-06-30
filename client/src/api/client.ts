@@ -100,6 +100,34 @@ export function getRecommendation(recommendationId: string) {
 }
 
 // ============================================================
+// Topology（拓扑）
+// ============================================================
+
+export function listAssociations() {
+  return request('/topology/associations');
+}
+
+export function listServices() {
+  return request('/topology/services');
+}
+
+// ============================================================
+// Goals（目标）—— 用于 Artifacts 页
+// ============================================================
+
+export function listGoals(body?: Record<string, unknown>) {
+  return request('/goals/list', { method: 'POST', body: JSON.stringify(body || {}) });
+}
+
+// ============================================================
+// Changes（变更）
+// ============================================================
+
+export function listChanges(body?: Record<string, unknown>) {
+  return request('/changes/list', { method: 'POST', body: JSON.stringify(body || {}) });
+}
+
+// ============================================================
 // 其它
 // ============================================================
 
