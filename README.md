@@ -57,6 +57,32 @@ This launches:
 | `npm run dev:client` | Start frontend only |
 | `npm run install:all` | Install all dependencies (root + client) |
 
+## Testing
+
+Tests use [Vitest](https://vitest.dev/) on both sides, with [Supertest](https://github.com/ladjs/supertest) for the backend HTTP layer. **No test hits AWS or the network** — the backend injects a fake AWS client via the `createApp({ createAwsClient })` factory, and the frontend mocks `fetch`. Tests run offline with no AWS credentials.
+
+Run everything from the repo root:
+
+```bash
+npm test          # backend (server/) then frontend (client/)
+```
+
+Or each side on its own:
+
+```bash
+npm run test:server   # backend only (vitest run, from root)
+npm run test:client   # frontend only (delegates to client)
+```
+
+What's covered so far:
+
+- **`server/routes.js`** — normal + error paths for the investigations, recommendations, chat, journal (auto-pagination), topology, config, and changes endpoints. AWS SDK exceptions (`ResourceNotFoundException`, `ValidationException`, `AccessDeniedException`, `ThrottlingException`) are asserted to map to the right HTTP status and Chinese error message.
+- **`server/index.js`** — the AWS credential-injection middleware returns HTTP 500 with a Chinese message when credential loading fails.
+- **`client/src/utils/status.ts`** — status/priority label + color mapping, including the unknown-value fallback.
+- **`client/src/api/client.ts`** — the `fetch` wrapper: URL/method/body construction, JSON parsing, and error handling.
+
+CI runs install + lint + test + client build on every push and pull request (see `.github/workflows/test.yml`).
+
 ## Project Structure
 
 ```
