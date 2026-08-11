@@ -55,10 +55,99 @@ export function createChat() {
 }
 
 export function sendMessage(executionId: string, message: string) {
-  return request(`/chat/${executionId}/message`, {
-    method: 'POST',
-    body: JSON.stringify({ message }),
-  });
+  return request<{ text: string; title?: string; usage?: TokenUsage }>(
+    `/chat/${executionId}/message`,
+    { method: 'POST', body: JSON.stringify({ message }) }
+  );
+}
+
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+/**
+ * 后端 SSE 事件（对应 server/routes.js 的 /message/stream）
+ * delta / block 只包含用户可见正文；后端已按 block type 过滤掉
+ * context_usage(内部遥测) 和 final_response(与正文重复)。
+ */
+export type ChatStreamEvent =
+  | { event: 'delta'; data: { index: number; text: string } }
+  | { event: 'block'; data: { index: number; text: string } }
+  | { event: 'title'; data: { title: string } }
+  | { event: 'tool'; data: { note: string } }
+  | { event: 'summary'; data: { content: string } }
+  | { event: 'complete'; data: { text: string; usage?: TokenUsage } }
+  | { event: 'error'; data: { message: string } };
+
+/**
+ * 流式发消息。用 fetch + ReadableStream 而不是 EventSource，原因：
+ * EventSource 只支持 GET 且不能带自定义 header / body，这里要 POST 消息体。
+ *
+ * onEvent 会随事件到达被逐个调用。返回 abort 函数用于中断（切会话/卸载时调用）。
+ * 流断了不影响正确性 —— journal 才是消息历史的真相源，前端照常轮询兜底。
+ */
+export function sendMessageStream(
+  executionId: string,
+  message: string,
+  onEvent: (e: ChatStreamEvent) => void
+): { done: Promise<void>; abort: () => void } {
+  const controller = new AbortController();
+
+  const done = (async () => {
+    const res = await fetch(`${BASE_URL}/chat/${executionId}/message/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({ message }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok || !res.body) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `流式请求失败 (${res.status})`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    // 关键：currentEvent / currentData 必须在 while 之外声明。
+    // 单个 SSE 事件可能被 TCP 分块切开，跨 chunk 时状态要保留，
+    // 否则事件在边界处被静默丢弃。
+    let currentEvent = '';
+    let currentData = '';
+
+    try {
+      for (;;) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // 最后一行可能不完整，留在 buffer
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            currentData = line.slice(6);
+          } else if (line === '' && currentEvent && currentData) {
+            try {
+              onEvent({ event: currentEvent, data: JSON.parse(currentData) } as ChatStreamEvent);
+            } catch {
+              console.warn('SSE 事件解析失败:', currentEvent, currentData);
+            }
+            currentEvent = '';
+            currentData = '';
+          }
+        }
+      }
+    } finally {
+      reader.cancel().catch(() => {});
+    }
+  })();
+
+  return { done, abort: () => controller.abort() };
 }
 
 /** 读取某个对话会话的消息历史（底层与调查 journal 同一接口，语义不同） */
