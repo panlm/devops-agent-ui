@@ -48,12 +48,21 @@ function createApp({ createAwsClient = defaultCreateAwsClient } = {}) {
   app.use(express.json());
 
   // Inject AWS client into request
+  // 记录凭证注入结果(req.awsCredentialsOk)供 /api/health 复用——健康检查不能因凭证
+  // 缺失而 500。业务接口仍保持原行为：凭证加载失败直接返回 500，绝不放行到路由。
   app.use(async (req, res, next) => {
     try {
       req.awsClient = await createAwsClient();
+      req.awsCredentialsOk = true;
       req.agentSpaceId = process.env.AGENT_SPACE_ID;
       next();
     } catch (err) {
+      req.awsCredentialsOk = false;
+      // 健康检查端点必须在无凭证时也能响应——放行，由 /api/health 自行读取上面的标记。
+      if (req.path === '/api/health') {
+        req.agentSpaceId = process.env.AGENT_SPACE_ID;
+        return next();
+      }
       res.status(500).json({
         error: 'AWS 凭证错误',
         message: '无法加载 AWS 凭证，请检查 ~/.aws/credentials 或环境变量配置',
