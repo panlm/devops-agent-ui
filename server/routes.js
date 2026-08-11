@@ -15,7 +15,29 @@ const {
   ListGoalsCommand,
 } = require('@aws-sdk/client-devops-agent');
 
+const path = require('path');
+// 根 package.json 的 version。启动时读一次即可，无需每次请求都读盘。
+const { version: APP_VERSION } = require(path.join(__dirname, '..', 'package.json'));
+
 const router = express.Router();
+
+// ============================================================
+// Health（健康检查）—— 不依赖 AWS 可达性，无凭证 / 无网络也能响应。
+// ============================================================
+
+// GET /api/health - 轻量健康检查
+// 复用注入中间件的凭证加载结果(req.awsCredentialsOk)，绝不新发起 AWS 调用。
+// 凭证缺失时仍返回 HTTP 200，只把 status 置为 degraded。
+router.get('/health', (req, res) => {
+  const awsCredentials = req.awsCredentialsOk === true;
+  res.status(200).json({
+    status: awsCredentials ? 'ok' : 'degraded',
+    aws_credentials: awsCredentials,
+    agent_space_id_configured: Boolean(process.env.AGENT_SPACE_ID),
+    uptime_seconds: Math.floor(process.uptime()),
+    version: APP_VERSION,
+  });
+});
 
 // ============================================================
 // Investigation(调查 = Backlog Task)相关接口
