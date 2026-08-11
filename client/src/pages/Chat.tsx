@@ -5,7 +5,7 @@ import { SendOutlined, PlusOutlined, MessageOutlined, ReloadOutlined } from '@an
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import dayjs from 'dayjs';
-import { createChat, sendMessage, getChatMessages, listChats } from '../api/client';
+import { createChat, sendMessageStream, getChatMessages, listChats } from '../api/client';
 
 marked.setOptions({ breaks: true, gfm: true });
 
@@ -40,9 +40,23 @@ export default function Chat() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  // 流式增量文本。非空时渲染成一个临时的 assistant 气泡；
+  // journal 轮询把正式消息取回来后清空，避免与正式消息重复显示。
+  const [streamingText, setStreamingText] = useState('');
+  // 工具调用进度提示。Agent 调工具时事件流会静默数十秒，用它避免看起来像卡死。
+  const [toolNote, setToolNote] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const sentAtRef = useRef<number>(0);
   const lastScrolledSessionRef = useRef<string | null>(null);
+  const abortRef = useRef<(() => void) | null>(null);
+
+  // 卸载或切会话时中断在途的流
+  useEffect(() => {
+    return () => {
+      abortRef.current?.();
+      abortRef.current = null;
+    };
+  }, [executionId]);
 
   // 会话清单
   const {
@@ -106,15 +120,16 @@ export default function Chat() {
   // 滚动到底部：切换会话首次加载时瞬间定位到最后一条（无动画，不再从头滚），
   // 同一会话内来新消息时才平滑滚动。
   useEffect(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0 && !streamingText) return;
     const isNewSession = lastScrolledSessionRef.current !== executionId;
     if (isNewSession) {
       lastScrolledSessionRef.current = executionId;
       bottomRef.current?.scrollIntoView({ behavior: 'auto' });
     } else {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // 流式增量期间用 auto，避免每个 chunk 都触发一次平滑动画导致抖动
+      bottomRef.current?.scrollIntoView({ behavior: streamingText ? 'auto' : 'smooth' });
     }
-  }, [messages, sending, executionId]);
+  }, [messages, sending, executionId, streamingText]);
 
   // Stop polling: wait at least 5s, then check if last record is final_response.
   // After stopping, do one final refetch to ensure we have the complete response.
@@ -176,12 +191,59 @@ export default function Chat() {
     setMessages((prev) => [...prev, { role: 'user', content: text, time: new Date().toISOString() }]);
     sentAtRef.current = Date.now();
     setSending(true);
+    setStreamingText('');
+    setToolNote('');
+
+    // 逐块累积：每个 index 的 delta 各自拼接，再按 index 顺序合并。
+    // 服务端已按 block 顺序推送，这里用 Map 保证乱序到达也能正确归位。
+    const chunksByIndex = new Map<number, string[]>();
+    const render = () =>
+      setStreamingText(
+        [...chunksByIndex.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([, parts]) => parts.join(''))
+          .join('\n')
+      );
+
+    const { done, abort } = sendMessageStream(eid!, text, (e) => {
+      if (e.event === 'delta') {
+        const arr = chunksByIndex.get(e.data.index) || [];
+        arr.push(e.data.text);
+        chunksByIndex.set(e.data.index, arr);
+        render();
+      } else if (e.event === 'block') {
+        // block 事件带该块最终文本，用它覆盖累积值（stop.text 可能比 delta 更完整）
+        chunksByIndex.set(e.data.index, [e.data.text]);
+        render();
+      } else if (e.event === 'title') {
+        // Agent 生成了会话标题，立刻刷新左侧列表（不必等轮询）
+        refetchChats();
+      } else if (e.event === 'tool') {
+        // Agent 在调工具，期间流会静默数十秒，显示动作让用户知道没卡死
+        setToolNote(e.data.note);
+      } else if (e.event === 'error') {
+        setMessages((prev) => [...prev, { role: 'system', content: `响应失败: ${e.data.message}` }]);
+      }
+      // complete 不在这里收尾：交给 journal 轮询取正式消息，
+      // 保证刷新页面后看到的内容与流式期间一致。
+    });
+    abortRef.current = abort;
 
     try {
-      await sendMessage(eid!, text);
+      await done;
+      // 流结束后立刻拉一次 journal，正式消息落地后清掉临时气泡
+      await refetchJournal();
+      setStreamingText('');
+      setToolNote('');
     } catch (err: any) {
-      setMessages((prev) => [...prev, { role: 'system', content: `发送失败: ${err.message}` }]);
+      if (err.name !== 'AbortError') {
+        setMessages((prev) => [...prev, { role: 'system', content: `发送失败: ${err.message}` }]);
+      }
+      setStreamingText('');
+      setToolNote('');
       setSending(false);
+    } finally {
+      abortRef.current = null;
     }
   };
 
@@ -317,11 +379,35 @@ export default function Chat() {
               </div>
             ))}
 
-            {/* Typing indicator */}
-            {sending && (
+            {/* 流式输出中的临时气泡 */}
+            {streamingText && (
+              <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
+                <div
+                  style={{
+                    maxWidth: '80%',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    padding: '10px 16px',
+                    borderRadius: 12,
+                    background: '#f0f0f0',
+                    color: '#000',
+                  }}
+                >
+                  <Md>{streamingText}</Md>
+                  <span className="stream-caret" />
+                </div>
+              </div>
+            )}
+
+            {/* 进度提示：调工具时显示动作，否则显示思考中。
+                正文已开始流出且无工具动作时不显示，避免与正文气泡叠加。 */}
+            {sending && (toolNote || !streamingText) && (
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
                 <div style={{ padding: '10px 16px', borderRadius: 12, background: '#f0f0f0' }}>
-                  <Spin size="small" /> <Text type="secondary" style={{ marginLeft: 8 }}>Agent 思考中...</Text>
+                  <Spin size="small" />
+                  <Text type="secondary" style={{ marginLeft: 8 }}>
+                    {toolNote || 'Agent 思考中...'}
+                  </Text>
                 </div>
               </div>
             )}

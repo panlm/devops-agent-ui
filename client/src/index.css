@@ -209,3 +209,17 @@ code {
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background-color: #a8a8a8;
 }
+
+/* 流式输出光标 */
+.stream-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background-color: #1677ff;
+  animation: stream-blink 1s step-end infinite;
+}
+@keyframes stream-blink {
+  50% { opacity: 0; }
+}
