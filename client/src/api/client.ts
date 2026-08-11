@@ -223,3 +223,19 @@ export function listChanges(body?: Record<string, unknown>) {
 export function getConfig() {
   return request<{ agentSpaceId: string; region: string; profile: string }>('/config');
 }
+
+// ============================================================
+// Health（健康检查）
+// ============================================================
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded';
+  aws_credentials: boolean;
+  agent_space_id_configured: boolean;
+  uptime_seconds: number;
+  version: string;
+}
+
+export function getHealth() {
+  return request<HealthResponse>('/health');
+}

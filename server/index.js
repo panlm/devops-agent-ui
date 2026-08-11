@@ -1,34 +1,14 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createAwsClient } = require('./aws-client');
+const { createAwsClient: defaultCreateAwsClient } = require('./aws-client');
 const apiRoutes = require('./routes');
 
-const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: 'http://localhost:5173' }));
-app.use(express.json());
-
-// Inject AWS client into request
-app.use(async (req, res, next) => {
-  try {
-    req.awsClient = await createAwsClient();
-    req.agentSpaceId = process.env.AGENT_SPACE_ID;
-    next();
-  } catch (err) {
-    res.status(500).json({
-      error: 'AWS 凭证错误',
-      message: '无法加载 AWS 凭证，请检查 ~/.aws/credentials 或环境变量配置',
-      detail: err.message,
-    });
-  }
-});
-
-app.use('/api', apiRoutes);
-
 // Error handler
-app.use((err, req, res, next) => {
+// 具名并复用同一套 AWS 异常 → HTTP 状态 / 中文文案的映射。
+function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-vars
   console.error('API Error:', err);
 
   const statusMap = {
@@ -55,10 +35,56 @@ app.use((err, req, res, next) => {
     error: message,
     detail: err.message,
   });
-});
+}
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`DevOps Agent UI 后端已启动: http://127.0.0.1:${PORT}`);
-  console.log(`Agent Space ID: ${process.env.AGENT_SPACE_ID}`);
-  console.log(`AWS Profile: ${process.env.AWS_PROFILE || 'default'}`);
-});
+// 用工厂函数组装 app，把 createAwsClient 做成可注入的依赖。
+// 生产环境不传参 → 用真实的 createAwsClient，行为与之前完全一致；
+// 测试注入一个假的 createAwsClient（返回带可控 send 的假 client），
+// 从而在不打 AWS、不需要凭证的前提下跑通真实的中间件 / 路由 / 错误处理。
+function createApp({ createAwsClient = defaultCreateAwsClient } = {}) {
+  const app = express();
+
+  app.use(cors({ origin: 'http://localhost:5173' }));
+  app.use(express.json());
+
+  // Inject AWS client into request
+  // 记录凭证注入结果(req.awsCredentialsOk)供 /api/health 复用——健康检查不能因凭证
+  // 缺失而 500。业务接口仍保持原行为：凭证加载失败直接返回 500，绝不放行到路由。
+  app.use(async (req, res, next) => {
+    try {
+      req.awsClient = await createAwsClient();
+      req.awsCredentialsOk = true;
+      req.agentSpaceId = process.env.AGENT_SPACE_ID;
+      next();
+    } catch (err) {
+      req.awsCredentialsOk = false;
+      // 健康检查端点必须在无凭证时也能响应——放行，由 /api/health 自行读取上面的标记。
+      if (req.path === '/api/health') {
+        req.agentSpaceId = process.env.AGENT_SPACE_ID;
+        return next();
+      }
+      res.status(500).json({
+        error: 'AWS 凭证错误',
+        message: '无法加载 AWS 凭证，请检查 ~/.aws/credentials 或环境变量配置',
+        detail: err.message,
+      });
+    }
+  });
+
+  app.use('/api', apiRoutes);
+  app.use(errorHandler);
+
+  return app;
+}
+
+// 仅当直接运行(node server/index.js)时才监听端口；被 require(如测试用 supertest)时不绑定端口。
+if (require.main === module) {
+  const app = createApp();
+  app.listen(PORT, '127.0.0.1', () => {
+    console.log(`DevOps Agent UI 后端已启动: http://127.0.0.1:${PORT}`);
+    console.log(`Agent Space ID: ${process.env.AGENT_SPACE_ID}`);
+    console.log(`AWS Profile: ${process.env.AWS_PROFILE || 'default'}`);
+  });
+}
+
+module.exports = { createApp, errorHandler };

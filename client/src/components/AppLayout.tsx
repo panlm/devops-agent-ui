@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Typography, theme } from 'antd';
+import { Layout, Menu, Typography, theme, Badge, Tooltip } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import {
   SearchOutlined,
   PlusCircleOutlined,
@@ -11,9 +12,42 @@ import {
   FileTextOutlined,
   ApartmentOutlined,
 } from '@ant-design/icons';
+import { getHealth } from '../api/client';
+import { deriveHealthIndicator } from '../utils/health';
 
 const { Sider, Content, Header } = Layout;
 const { Text } = Typography;
+
+// 顶栏右侧的后端健康指示：通过 api/client 调 /api/health，react-query 每 30s 轮询一次。
+function HealthIndicator() {
+  const { data, isError } = useQuery({
+    queryKey: ['health'],
+    queryFn: getHealth,
+    refetchInterval: 30_000,
+    retry: false,
+  });
+
+  const indicator = deriveHealthIndicator(data, isError);
+
+  const tooltip = data ? (
+    <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+      <div>凭证: {data.aws_credentials ? '已加载' : '未加载'}</div>
+      <div>Agent Space: {data.agent_space_id_configured ? '已配置' : '未配置'}</div>
+      <div>版本: {data.version}</div>
+      <div>运行时长: {data.uptime_seconds}s</div>
+    </div>
+  ) : (
+    '无法连接后端 /api/health'
+  );
+
+  return (
+    <Tooltip title={tooltip}>
+      <span style={{ cursor: 'default' }}>
+        <Badge status={indicator.color} text={indicator.label} />
+      </span>
+    </Tooltip>
+  );
+}
 
 const menuItems = [
   { key: '/new', icon: <PlusCircleOutlined />, label: '新建调查' },
@@ -72,12 +106,14 @@ export default function AppLayout() {
             padding: '0 24px',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             borderBottom: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
           <Text strong style={{ fontSize: 16 }}>
             AWS DevOps Agent 运维控制台
           </Text>
+          <HealthIndicator />
         </Header>
         <Content style={{ margin: 24, overflow: 'auto' }}>
           <Outlet />
